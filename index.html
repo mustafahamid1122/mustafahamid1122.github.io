@@ -628,6 +628,9 @@ function mapDbProduct(r){
   base.discount_percent = r.discount_percent != null ? Math.max(0, Math.min(90, Number(r.discount_percent)||0)) : (base.discount_percent||0);
   base.is_offer = r.is_offer != null ? !!r.is_offer : !!base.is_offer;
   base.stock = (r.stock === null || r.stock === undefined) ? null : Math.max(0, parseInt(r.stock, 10) || 0); /* null = رصيد غير مُدار */
+  if (r.name_en) base.en = r.name_en; else if (r.en) base.en = r.en; /* الاسم الإنجليزي المحفوظ بقاعدة البيانات يتقدّم على الافتراضي */
+  if (r.brand) base.brand = r.brand;
+  if (r.size) base.size = r.size;
   base.inactive = r.is_active === false; /* المعطّل (نفد رصيده) يختفي من الواجهة ويبقى ظاهرًا باللوحة */
   if (r.description) base.desc = r.description;
   if (r.category){
@@ -1257,13 +1260,13 @@ function renderProductsTab(){
     + '<div class="field"><label for="aName">اسم المنتج *</label><input id="aName" type="text" placeholder="مثال: كريم مرطب…" required /></div>'
     + '<div class="field"><label for="aEn">الاسم بالإنجليزية / الماركة (اختياري)</label><input id="aEn" type="text" placeholder="Brand — size" /></div>'
     + '<div class="field"><label for="aBrand">الماركة (اختياري)</label><input id="aBrand" type="text" placeholder="مثال: QV" /></div>'
-    + '<div class="field"><label for="aPrice">السعر بالدينار العراقي *</label><input id="aPrice" type="number" min="0" step="250" inputmode="numeric" placeholder="مثال: 12000" required /></div>'
-    + '<div class="field"><label for="aDisc">نسبة الخصم % (اتركها 0 إذا ما أكو خصم)</label><input id="aDisc" type="number" min="0" max="90" step="1" inputmode="numeric" placeholder="0" value="0" /></div>'
+    + '<div class="field"><label for="aPrice">السعر بالدينار العراقي *</label><input id="aPrice" type="text" inputmode="numeric" placeholder="مثال: 12000" required /></div>'
+    + '<div class="field"><label for="aDisc">نسبة الخصم % (اتركها 0 إذا ما أكو خصم)</label><input id="aDisc" type="text" inputmode="numeric" placeholder="0" value="0" /></div>'
     + '<div class="field"><label class="toggle-row"><input id="aOffer" type="checkbox" /> عرض خاص — يظهر بقسم «العروض والخصومات» وعلى لوحة الإعلانات</label></div>'
     + '<div class="field"><label for="aCat">القسم *</label><select id="aCat">'+ CATEGORIES.map(function(c){ return '<option value="'+c.id+'">'+esc(c.name)+'</option>'; }).join("") +'<option value="other">قسم آخر (اكتب اسمه بالأسفل)</option></select></div>'
     + '<div class="field" id="customCatWrap" style="display:none"><label for="aCatCustom">اسم القسم الجديد</label><input id="aCatCustom" type="text" placeholder="مثال: العناية بالشعر" /></div>'
     + '<div class="field"><label for="aSize">الحجم / العبوة (اختياري)</label><input id="aSize" type="text" placeholder="مثال: 200 مل" /></div>'
-    + '<div class="field"><label for="aStock">الرصيد — عدد القطع المتوفرة (اتركه فارغًا = بدون إدارة رصيد ويبقى المنتج ظاهرًا دائمًا · عند وصوله إلى صفر يختفي المنتج من المتجر تلقائيًا)</label><input id="aStock" type="number" min="0" step="1" inputmode="numeric" placeholder="مثال: 12" /></div>'
+    + '<div class="field"><label for="aStock">الرصيد — عدد القطع المتوفرة (اتركه فارغًا = بدون إدارة رصيد ويبقى المنتج ظاهرًا دائمًا · عند وصوله إلى صفر يختفي المنتج من المتجر تلقائيًا)</label><input id="aStock" type="text" inputmode="numeric" placeholder="مثال: 12" /></div>'
     + '<div class="field"><label for="aDesc">وصف قصير *</label><textarea id="aDesc" rows="2" placeholder="سطر أو سطرين عن المنتج وفائدته" required></textarea></div>'
     + '<div class="field"><label for="aPhoto">صورة المنتج — ارفعها من جهازك (تُنشر أونلاين وتظهر لكل الزبائن)</label><input id="aPhoto" type="file" accept="image/*" /><img class="photo-prev" id="photoPrev" alt="معاينة صورة المنتج" /></div>'
     + '<div class="field"><label for="aUrl">أو رابط صورة (URL)</label><input id="aUrl" type="url" placeholder="https://…" /></div>'
@@ -1363,61 +1366,88 @@ function deleteProduct(id, btn){
   if (p.dbId) sb.from("products").delete().eq("id", p.dbId).then(done, function(){ authMsg("err","تعذر الاتصال — حاول مرة ثانية."); });
   else sb.from("products").update({ is_active:false }).eq("name", p.name).then(done, function(){ authMsg("err","تعذر الاتصال — حاول مرة ثانية."); });
 }
+/* تحويل الأرقام العربية المشرقية (٠-٩) والمغربية الفارسية (۰-۹) إلى أرقام لاتينية قبل القراءة الرقمية —
+   بدونها parseInt("٢") يرجع NaN وكان الرصيد ينحفظ صفرًا بالغلط من أول حفظ */
+function normDigits(s){
+  return String(s==null?"":s)
+    .replace(/[٠-٩]/g, function(c){ return "0123456789".charAt("٠١٢٣٤٥٦٧٨٩".indexOf(c)); })
+    .replace(/[۰-۹]/g, function(c){ return "0123456789".charAt("۰۱۲۳۴۵۶۷۸۹".indexOf(c)); });
+}
+function parseNum(s){
+  var t=normDigits(s).replace(/[^0-9.\-]/g,"");
+  if (t==="" || t==="-" || t===".") return NaN;
+  return parseInt(t,10);
+}
 function saveProduct(e){
   e.preventDefault();
   var name=document.getElementById("aName").value.trim(),
-      price=parseInt(document.getElementById("aPrice").value,10),
+      price=parseNum(document.getElementById("aPrice").value),
       desc=document.getElementById("aDesc").value.trim(),
       catVal=document.getElementById("aCat").value,
       cat = catVal==="other" ? (document.getElementById("aCatCustom").value.trim()||"other") : catVal;
   if (!name || isNaN(price) || price<0 || !desc){ toast("فضلًا عبّي الاسم والسعر والوصف"); return; }
   if (!sb){ toast("الاتصال بقاعدة البيانات غير متاح حاليًا"); return; }
-  var disc=parseInt(document.getElementById("aDisc").value,10);
+  var disc=parseNum(document.getElementById("aDisc").value);
   if (isNaN(disc) || disc<0) disc=0; if (disc>90) disc=90;
   var isOffer=document.getElementById("aOffer").checked;
-  var stockRaw=document.getElementById("aStock").value.trim();
+  var enVal=document.getElementById("aEn").value.trim();
+  var brandVal=document.getElementById("aBrand").value.trim();
+  var sizeVal=document.getElementById("aSize").value.trim();
+  var stockRaw=normDigits(document.getElementById("aStock").value).trim();
   var stockVal=null; /* فارغ = رصيد غير مُدار */
-  if (stockRaw !== ""){ stockVal=parseInt(stockRaw,10); if (isNaN(stockVal) || stockVal<0) stockVal=0; }
+  if (stockRaw !== ""){
+    stockVal=parseNum(stockRaw);
+    /* رصيد مكتوب بس غير مقروء كرقم؟ أوقف الحفظ ونبّه — لا نحوّله لصفر بصمت (كان يخفي المنتج «نفد الرصيد») */
+    if (isNaN(stockVal) || stockVal<0){ authMsg("err","الرصيد لازم يكون عددًا صحيحًا (0 أو أكثر) — اكتبه بأرقام واضحة، مثال: 2"); return; }
+  }
   var existing = editingId ? findProduct(editingId) : null;
   var saveBtn = document.getElementById("saveBtn");
   var finishSave = function(imageUrl){
+    /* كل حقول النموذج تنحفظ من أول مرة: الاسم الإنجليزي والماركة والحجم والرصيد تنضم لصف الحفظ نفسه، بالإدراج وبالتعديل */
     /* رصيد مُدار: صفر يعني معطّل مخفي من المتجر، وأكبر من صفر يعني ظاهر — وغير المُدار ظاهر دائمًا */
-    var row={ name:name, price:price, description:desc, category:cat, is_active:(stockVal===null ? true : stockVal>0), discount_percent:disc, is_offer:isOffer, stock:stockVal };
+    var row={ name:name, price:price, description:desc, category:cat, is_active:(stockVal===null ? true : stockVal>0), discount_percent:disc, is_offer:isOffer, stock:stockVal, name_en:enVal||null, brand:brandVal||null, size:sizeVal||null };
     if (imageUrl) row.image_url=imageUrl;
-    var done=function(res){
-      if (res && res.error){
-        /* إذا عمود stock بعد ما انضاف لجدول products، احفظ المنتج بدونه ونبّه */
-        if (/stock/.test(res.error.message||"") && "stock" in row){
-          var rowS={}; for (var kS in row) rowS[kS]=row[kS]; delete rowS.stock; rowS.is_active=true;
-          var retryS=function(rS){
-            if (rS && rS.error){ authMsg("err", sbErr(rS)); return; }
-            productsCache=null; loadDbProducts(function(){ renderAll(); renderAdminPanel(); });
-            toast("انحفظ المنتج، بس الرصيد يحتاج إضافة عمود stock لجدول المنتجات بقاعدة البيانات");
-          };
-          if (existing && existing.dbId) sb.from("products").update(rowS).eq("id", existing.dbId).then(retryS, fail);
-          else sb.from("products").insert(rowS).then(retryS, fail);
-          return;
-        }
-        /* إذا عمودا الخصم بعد ما انضافا لجدول products، احفظ المنتج بدونهما ونبّه */
-        if (/discount_percent|is_offer/.test(res.error.message||"")){
-          var row2={}; for (var k in row) row2[k]=row[k]; delete row2.discount_percent; delete row2.is_offer;
-          var retry=function(r2){
-            if (r2 && r2.error){ authMsg("err", sbErr(r2)); return; }
-            productsCache=null; loadDbProducts(function(){ renderAll(); renderAdminPanel(); });
-            toast("انحفظ المنتج، بس الخصم يحتاج إضافة عمودي discount_percent و is_offer لجدول المنتجات بقاعدة البيانات");
-          };
-          if (existing && existing.dbId) sb.from("products").update(row2).eq("id", existing.dbId).then(retry, fail);
-          else sb.from("products").insert(row2).then(retry, fail);
-          return;
-        }
-        authMsg("err", sbErr(res)); return;
-      }
-      productsCache=null; loadDbProducts(function(){ renderAll(); renderAdminPanel(); });
-      toast(editingId ? "تم حفظ التعديلات بالمتجر ✓" : "تمت إضافة المنتج للمتجر ✓");
-    };
     var fail=function(){ authMsg("err","تعذر الاتصال — حاول مرة ثانية."); };
-    if (existing && existing.dbId) sb.from("products").update(row).eq("id", existing.dbId).then(done, fail);
-    else sb.from("products").insert(row).then(done, fail);
+    /* أعمدة اختيارية: إذا عمود منها بعد ما انضاف لجدول products، يُحذف من المحاولة ويُعاد الحفظ بدونه مع تنبيه بأسمائه العربية */
+    var OPTIONAL=["stock","discount_percent","is_offer","name_en","brand","size"];
+    var OPT_LABEL={ stock:"الرصيد", discount_percent:"نسبة الخصم", is_offer:"العرض الخاص", name_en:"الاسم الإنجليزي", brand:"الماركة", size:"الحجم" };
+    var stripped=[];
+    var afterSave=function(){
+      productsCache=null; loadDbProducts(function(){ renderAll(); renderAdminPanel(); });
+      if (stripped.length){
+        var labels=stripped.map(function(k){ return OPT_LABEL[k]||k; }).join("، ");
+        toast("انحفظ المنتج ✓ — تنبيه: هاي الحقول تحتاج إضافة أعمدتها لجدول المنتجات بقاعدة البيانات حتى تنحفظ: "+labels);
+      }
+      else toast(editingId ? "تم حفظ التعديلات بالمتجر ✓" : "تمت إضافة المنتج للمتجر ✓");
+    };
+    var finalize=function(savedRow){
+      /* تحقق من أول حفظ: إذا الرصيد المُدخل ما انحفظ مثل ما هو (انحفظ صفرًا مثلًا)، صحّحه فورًا بتحديث مباشر على نفس الصف */
+      if (stockVal!==null && stripped.indexOf("stock")===-1 && savedRow && savedRow.id && Number(savedRow.stock)!==stockVal){
+        sb.from("products").update({ stock:stockVal, is_active:stockVal>0 }).eq("id", savedRow.id).then(afterSave, afterSave);
+        return;
+      }
+      afterSave();
+    };
+    var attempt=function(r){
+      var q = (existing && existing.dbId)
+        ? sb.from("products").update(r).eq("id", existing.dbId).select()
+        : sb.from("products").insert(r).select();
+      q.then(function(res){
+        if (res && res.error){
+          var msg=res.error.message||"";
+          var toStrip=OPTIONAL.filter(function(k){ return (k in r) && msg.indexOf(k)!==-1; });
+          if (toStrip.length){
+            var r2={}; for (var k in r) r2[k]=r[k];
+            toStrip.forEach(function(k){ delete r2[k]; stripped.push(k); });
+            if (toStrip.indexOf("stock")!==-1) r2.is_active=true;
+            attempt(r2); return;
+          }
+          authMsg("err", sbErr(res)); return;
+        }
+        finalize(res && res.data && res.data[0]);
+      }, fail);
+    };
+    attempt(row);
   };
   /* صورة جديدة من الجهاز؟ ارفعها أولًا إلى التخزين الأونلاين، ولا تحفظ المنتج إذا فشل الرفع */
   var hasNewFile = !!pendingPhotoFile || (pendingPhoto && pendingPhoto.indexOf("data:")===0);
